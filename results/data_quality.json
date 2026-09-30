@@ -1,0 +1,22 @@
+{
+  "raw_traffic_rows": 45802,
+  "selected_detector_rows_before_cleanup": 5725,
+  "noise_rows": 5872,
+  "invalid_timestamp_rows": 0,
+  "duplicate_traffic_rows_beyond_first": 3,
+  "duplicate_timestamps_excluded": 3,
+  "hourly_grid_rows": 5725,
+  "missing_traffic_hours_before_forward_fill": 6,
+  "missing_noise_hours_before_forward_fill": 8,
+  "start": "2022-05-01 01:00:00",
+  "end": "2022-12-25 13:00:00",
+  "validation_start": "2022-09-21 04:00:00",
+  "test_start": "2022-11-07 21:00:00",
+  "window_hours": 9,
+  "forecast_steps": 1,
+  "usable_windows": {
+    "train": 3423,
+    "validation": 1142,
+    "test": 1145
+  }
+}

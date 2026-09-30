@@ -1,0 +1,15 @@
+{
+  "seed": 42,
+  "max_epochs": 50,
+  "batch_size": 32,
+  "selected_by_validation": "Conv1D | Traffic + noise",
+  "tensorflow": "2.20.0",
+  "numpy": "2.3.5",
+  "pandas": "2.2.3",
+  "python": "3.12.14",
+  "scikit_learn": "1.8.0",
+  "matplotlib": "3.10.8",
+  "architectures": "Original: LSTM/GRU 64 then 32 units; Conv1D 64 then 32 filters; dense 8 then 1",
+  "dropout": "LSTM traffic-only 0.4; all other variants 0.3; after both recurrent/convolution layers",
+  "target": "raw observed vehicle count at next timestamp; no target smoothing"
+}
