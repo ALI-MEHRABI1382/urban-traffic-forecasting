@@ -1,64 +1,47 @@
 # Urban Traffic Forecasting
 
-Can environmental noise help predict next-hour traffic?
+## Overview
 
-This project compares **LSTM, GRU and Conv1D** using traffic alone and traffic with environmental noise. It builds on my individual 2025 coursework at Budapest University of Technology and Economics. This reviewed portfolio revision restores the original neural-network architectures and training settings while correcting data preparation and evaluation.
+This project evaluates whether environmental noise measurements improve next-hour traffic forecasting. LSTM, GRU and Conv1D models are compared using two input configurations: historical traffic counts alone, and traffic counts combined with noise measurements. A persistence forecast provides a simple reference baseline.
 
-**Included run:** validation selected **Conv1D, Traffic + noise**. Its held-out test RMSE is **15.22 vehicles/hour**, versus **19.48** for persistence (21.9% lower). These are regenerated results for this revision, not the original smoothed-target scores.
+The project originated as individual coursework at Budapest University of Technology and Economics in 2025. The repository contains the forecasting pipeline, an executed analysis notebook, data extracts and experiment results.
 
-![Test model comparison](figures/model_comparison.png)
+## Data
 
-## Start here
+The analysis uses hourly Dublin traffic and environmental noise extracts from May–December 2022. Traffic observations are selected from **SCATS site 755, detector 1**. The coursework report identifies the study area as Ballymun Road and the noise source as Sonitus sensor 4; the sensor locations have not been independently verified from the supplied extracts.
 
-Open [traffic_forecasting.ipynb](traffic_forecasting.ipynb) to read the executed analysis and full modeling code. To run it locally, follow [START_HERE.md](START_HERE.md): extract the whole package, install the requirements in a Python 3.11 or 3.12 kernel, then restart the kernel and run every cell. **Training is enabled by default.** Progress is printed for each model and epoch.
+- **Traffic:** `Sum_Volume`, the number of vehicles recorded during the hour ending at the timestamp.
+- **Noise:** `LAeq`, equivalent continuous sound level in dB.
+- **Overlapping period:** 1 May 2022, 01:00 to 25 December 2022, 13:00.
 
-```bash
-python -m pip install -r requirements.txt
-python -m jupyterlab
-```
+Source attribution and extract provenance are documented in [data/README.md](data/README.md).
 
-The equivalent command-line run is:
+## Methodology
 
-```bash
-python forecasting.py --epochs 50 --batch-size 32
-```
+Each forecast uses the previous **nine hours** to predict the traffic count for the following hour. Evaluation follows a rolling one-step procedure: earlier observed test hours may be used as inputs to later predictions. Future traffic and noise observations are excluded from each input window.
 
-The notebook contains all pipeline definitions and does not import `forecasting.py`; the script supports the equivalent command-line workflow. Both use the CSVs in `data/`.
+Data preparation preserves recorded zero traffic counts and excludes conflicting readings at three duplicate timestamps. Observations are aligned to an hourly grid. Input gaps are forward-filled for at most two hours; windows containing unresolved missing values are excluded. Missing traffic targets are neither filled nor smoothed. Input and target scalers are fitted on training observations only.
 
-## Data and forecasting question
+The hourly timeline is divided chronologically into **60% training, 20% validation and 20% testing**. Validation begins on 21 September 2022, 04:00, and testing begins on 7 November 2022, 21:00. Both input configurations use identical eligible target timestamps: **3,423 training, 1,142 validation and 1,145 test samples**.
 
-The supplied coursework extracts contain Dublin traffic counts and environmental noise for May–December 2022. This analysis selects SCATS **site 755, detector 1**. The original report identifies Ballymun Road and Sonitus sensor 4; sensor proximity has not been independently reconstructed from the extract.
+### Model configurations
 
-`Sum_Volume` is the vehicle count for the hour ending at its timestamp; `LAeq` is environmental noise in dB. The overlap runs from 1 May 2022, 01:00 through 25 December 2022, 13:00. **Nine previous hourly observations predict the next hourly traffic count.** No future noise is used.
-
-The experiment evaluates rolling one-step predictions. Earlier observed test hours can become inputs to later test predictions. It does not predict the entire test period from a single starting point.
-
-## Data preparation and evaluation
-
-- Keep recorded zero traffic counts. Exclude both conflicting readings at each of three duplicate timestamps.
-- Reindex hourly and forward-fill input gaps for at most two hours using only the past. Exclude windows still incomplete. Never fill missing target counts.
-- Use raw traffic and noise without exponential smoothing. Fit input and target scaling only on training data.
-- Establish chronological 60/20/20 time boundaries. Validation begins 21 September 2022, 04:00; testing begins 7 November 2022, 21:00.
-- Use identical eligible targets for all variants: 3,423 training, 1,142 validation and 1,145 test windows.
-- Select by validation RMSE. Report test MAE and RMSE after converting predictions back to vehicle-count units.
-- Compare with persistence, which predicts the latest available hourly traffic feature.
-
-## Original models restored
-
-| Variant | Main layers | Dropout after each main layer |
+| Model | Main layers | Dropout after each main layer |
 | --- | --- | --- |
 | Traffic-only LSTM | 64 → 32 units | 40% |
 | Traffic + noise LSTM | 64 → 32 units | 30% |
-| Both GRU variants | 64 → 32 units | 30% |
-| Both Conv1D variants | 64 → 32 filters, kernel 2, same padding, ReLU | 30% |
+| GRU, both configurations | 64 → 32 units | 30% |
+| Conv1D, both configurations | 64 → 32 filters; kernel size 2; ReLU; same padding | 30% |
 
-All models finish with Dense 8 (ReLU) and Dense 1 (linear); Conv1D uses Flatten first. Training uses Adam at 0.001, MSE loss, batch size 32 and up to 50 epochs. Early stopping uses validation loss with patience 5 and restores best weights. Learning-rate reduction halves the rate after 3 epochs without improvement. Best model checkpoints are saved.
+All architectures use a Dense 8 layer with ReLU followed by a linear Dense 1 output. Conv1D includes a Flatten layer before the dense layers.
 
-**Interpretation detail:** the original LSTM variants have different dropout rates. Their comparison changes both features and regularization, so its difference cannot be attributed solely to adding noise. GRU and Conv1D retain matched architectures across feature variants.
+Training uses Adam with an initial learning rate of 0.001, mean squared error loss, batch size 32 and a maximum of 50 epochs. Early stopping monitors validation loss with patience 5 and restores the best weights. The learning rate is halved after three epochs without validation improvement. A fixed seed of 42 is used.
+
+The LSTM configurations have different dropout rates; their comparison changes both the feature inputs and regularization. GRU and Conv1D use matching architectures and dropout across the input configurations.
 
 ## Results
 
-Lower error is better. A fixed seed of 42 was used; the full environment is recorded in `results/run_config.json`.
+Models are selected using **validation RMSE**. Test MAE and RMSE are calculated after converting predictions back to hourly vehicle-count units. Lower values indicate smaller errors.
 
 | Model | Inputs | Epochs run | Validation RMSE | Test MAE | Test RMSE |
 | --- | --- | ---: | ---: | ---: | ---: |
@@ -70,33 +53,58 @@ Lower error is better. A fixed seed of 42 was used; the full environment is reco
 | GRU | Traffic + noise | 28 | 19.66 | 10.99 | 16.11 |
 | Conv1D | Traffic + noise | 25 | 18.09 | 10.32 | 15.22 |
 
-![Held-out predictions](figures/test_predictions.png)
+The validation-selected model was **Conv1D with traffic and noise inputs**, with test RMSE **15.22**, compared with **19.48** for persistence: a **21.9% reduction** in this run.
 
-A single run does not establish general superiority of an architecture or feature set. Test scores are reported for transparency; future tuning should use validation periods rather than repeatedly optimizing this test result.
+Traffic-only Conv1D achieved a lower test RMSE of **14.95**, although it was not the validation-selected configuration. Adding noise reduced LSTM test error slightly but increased GRU and Conv1D test error. These results do not demonstrate a consistent forecasting benefit from noise measurements. The LSTM dropout difference also limits attribution of its result to the additional feature.
 
-## Outputs and reuse
+![Test RMSE comparison](figures/model_comparison.png)
 
-| File or folder | Purpose |
-| --- | --- |
-| `traffic_forecasting.ipynb` | Full source and executed notebook outputs |
-| `forecasting.py` | Equivalent command-line pipeline |
-| `START_HERE.md` | Jupyter setup instructions |
-| `REVIEWED_CHANGES.md` | Changes agreed during the review |
-| `requirements.txt` | Tested core dependency versions |
-| `data/` | Supplied extracts and attribution |
-| `results/` | Metrics, predictions, histories, quality checks and run configuration |
-| `figures/` | Data, errors, prediction and training charts |
-| `models/` | Best checkpoints and fitted scalers for local reuse |
+![Observed and predicted test traffic](figures/test_predictions.png)
 
-The notebook's final code cell reloads a saved model and verifies its predictions. Saved models expect scaled inputs and return scaled predictions; reuse `models/preprocessing.joblib`. Generated models are excluded by `.gitignore` and need not be included in a GitHub upload.
+These results use raw traffic targets and should not be directly compared with scores from an earlier experiment using smoothed targets. Full metrics, predictions, training histories and run configuration are stored in `results/`.
 
 ## Limitations
 
-One detector, one test period and one random seed limit generalization. The supplied CSVs are already processed extracts with incomplete earlier preprocessing records. Timestamps lack timezone metadata; daylight-saving alignment is unverified. Short fills and detector faults can affect outcomes. The two-hour fill limit is a practical assumption, not a tuned optimum.
+The experiment covers one traffic detector, one held-out period and one random seed. The supplied CSVs are processed coursework extracts with incomplete earlier preprocessing records. Timestamps contain no explicit timezone information, so daylight-saving alignment is unverified. Detector faults and short forward fills may affect results; the two-hour filling limit is an assumption rather than a demonstrated optimum.
 
-Next steps include seasonal baselines, repeated seeds, temporal cross-validation and additional locations. See [data attribution](data/README.md) for the official dataset catalogs and [reviewed changes](REVIEWED_CHANGES.md) for differences from the original notebook.
+Further evaluation could include seasonal baselines, repeated seeds, temporal cross-validation and additional locations. Model development should continue to use validation data rather than repeatedly tuning against the reported test results.
+
+## Reproducing the experiment
+
+**Requirements:** Python 3.11 or 3.12. Core package versions are pinned in `requirements.txt`; the included run used Python 3.12.14 and TensorFlow CPU 2.20.0. A GPU is not required.
+
+After cloning or downloading and extracting the repository, run the following commands from its root folder:
+
+```bash
+python -m pip install -r requirements.txt
+python -m jupyterlab
+```
+
+Open `traffic_forecasting.ipynb` using that Python environment and select **Restart Kernel and Run All Cells**. The default configuration is `RETRAIN = True`, `MAX_EPOCHS = 50` and `BATCH_SIZE = 32`. The notebook contains the full pipeline code and reports training progress. Dependencies can alternatively be installed into the active notebook kernel using the commented `%pip install -r requirements.txt` cell, followed by a kernel restart.
+
+The equivalent command-line experiment is:
+
+```bash
+python forecasting.py --epochs 50 --batch-size 32
+```
+
+Training regenerates `results/`, `figures/` and `models/`. Setting `RETRAIN = False` displays the committed results without training; the checkpoint verification requires locally generated model files. Runtime and small numerical differences may vary across environments.
+
+## Repository structure
+
+| Path | Contents |
+| --- | --- |
+| `traffic_forecasting.ipynb` | Full analysis code and saved outputs |
+| `forecasting.py` | Equivalent command-line pipeline |
+| `requirements.txt` | Dependency versions |
+| `data/` | CSV extracts and source attribution |
+| `results/` | Metrics, predictions, histories and run details |
+| `figures/` | Data, model comparison, prediction and training charts |
+| `models/` | Generated locally: checkpoints and fitted scalers; excluded from Git |
+
+Saved checkpoints expect scaled inputs and produce scaled outputs. The matching preprocessing objects are generated in `models/preprocessing.joblib`.
 
 ## Author
 
 **Ali Mehrabi** — Computer Science student, Budapest University of Technology and Economics.  
-[GitHub: ALI-MEHRABI1382](https://github.com/ALI-MEHRABI1382)
+[GitHub profile](https://github.com/ALI-MEHRABI1382)
